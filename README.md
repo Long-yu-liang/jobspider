@@ -1,11 +1,10 @@
 ﻿# JobSpider
+## 操作
+.\.venv\Scripts\python job.py --key java --pages 1
 
-用于抓取招聘网站职位数据并写入 MySQL 的脚本项目。
+.\.venv\Scripts\python job_zhilian.py --pages 2 --key python --base-url "https://www.zhaopin.com/sou/jl538/kwpython/p1?srccode=401801"
 
-当前主要脚本是：
-- `job_zhilian.py`：智联招聘抓取（推荐使用）
-- `job.py`：猎聘抓取（保留）
-- `backfill_skills.py`：按已有 `job_url` 回填 `skills`（猎聘）
+.\.venv\Scripts\python generate_fingerprint.py --env .env
 
 ## 1. 环境要求
 

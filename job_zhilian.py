@@ -3,6 +3,7 @@ import base64
 import json
 import random
 import re
+import os
 import time
 from datetime import datetime
 from pathlib import Path
@@ -19,14 +20,40 @@ except ImportError:
 
 CHROME_BINARY = None
 HEADLESS = False
-FINGERPRINT_FILE = '1.txt'
+FINGERPRINT_FILE = '.env'
 USE_FINGERPRINT = False
 
 DEFAULT_ZHILIAN_URL = 'https://www.zhaopin.com/sou/jl538/kw01L00O80EO062/p1?srccode=401801'
 SKILLS_DIR = 'skills'
 
+def load_env_file(env_path='.env'):
+    data = {}
+    if not os.path.exists(env_path):
+        return data
+
+    with open(env_path, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('#') or '=' not in line:
+                continue
+            key, value = line.split('=', 1)
+            key = key.strip()
+            value = value.strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
+                value = value[1:-1]
+            data[key] = value
+    return data
+
 
 def read_fingerprint(file_path):
+    env_data = load_env_file('.env')
+    if env_data:
+        return {
+            'user_agent': env_data.get('ZHILIAN_USER_AGENT', ''),
+            'cookie': env_data.get('ZHILIAN_COOKIE', ''),
+            'xsrf_token': env_data.get('ZHILIAN_XSRF_TOKEN', ''),
+        }
+
     try:
         with open(file_path, 'r', encoding='utf-8') as file:
             text = file.read()
@@ -954,9 +981,10 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     HEADLESS = bool(args.headless)
-    USE_FINGERPRINT = bool(args.use_fingerprint or args.cookie or args.user_agent)
+    env_data = load_env_file('.env')
+    USE_FINGERPRINT = bool(args.use_fingerprint or args.cookie or args.user_agent or env_data.get('ZHILIAN_COOKIE'))
 
-    fingerprint = read_fingerprint(args.fingerprint_file) if args.use_fingerprint else {}
+    fingerprint = read_fingerprint(args.fingerprint_file) if USE_FINGERPRINT else {}
     if args.cookie:
         fingerprint['cookie'] = args.cookie
     if args.user_agent:
@@ -989,3 +1017,7 @@ if __name__ == '__main__':
     finally:
         driver.quit()
         connection.close()
+
+
+
+

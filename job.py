@@ -5,6 +5,7 @@ import json
 import time
 import base64
 import re
+import os
 from datetime import datetime
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 import argparse
@@ -16,11 +17,37 @@ except ImportError:
 
 CHROME_BINARY = None
 HEADLESS = False
-FINGERPRINT_FILE = '1.txt'
+FINGERPRINT_FILE = '.env'
 USE_FINGERPRINT = False
+
+def load_env_file(env_path='.env'):
+    data = {}
+    if not os.path.exists(env_path):
+        return data
+
+    with open(env_path, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('#') or '=' not in line:
+                continue
+            key, value = line.split('=', 1)
+            key = key.strip()
+            value = value.strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
+                value = value[1:-1]
+            data[key] = value
+    return data
 
 
 def read_fingerprint(file_path):
+    env_data = load_env_file('.env')
+    if env_data:
+        return {
+            'user_agent': env_data.get('LIEPIN_USER_AGENT', ''),
+            'cookie': env_data.get('LIEPIN_COOKIE', ''),
+            'xsrf_token': env_data.get('LIEPIN_XSRF_TOKEN', ''),
+        }
+
     try:
         with open(file_path, 'r', encoding='utf-8') as file:
             lines = [line.strip() for line in file if line.strip()]
@@ -418,7 +445,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Liepin job crawler')
     parser.add_argument('--key', default='java', help='Search keyword, e.g. java')
     parser.add_argument('--pages', type=int, default=1, help='Number of pages to crawl')
+    parser.add_argument('--use-fingerprint', action='store_true', help='Enable fingerprint from .env')
+    parser.add_argument('--retry-empty', type=int, default=2, help='Retry count when a page returns 0 records')
     args = parser.parse_args()
+    USE_FINGERPRINT = bool(args.use_fingerprint)
 
     key = args.key
     base_search_url = 'https://www.liepin.com/zhaopin/?city=410&currentPage=0&pageSize=40'
@@ -438,9 +468,18 @@ if __name__ == '__main__':
     for current_page in range(0, page_num):
         url = build_search_url(base_search_url, current_page, page_size=page_size, key=key)
         records = get_data(driver, url, seen_urls)
+        retry_count = 0
+        while not records and retry_count < args.retry_empty:
+            retry_count += 1
+            print(f'page {current_page} returned 0 records, retry {retry_count}/{args.retry_empty}...')
+            time.sleep(2 + retry_count)
+            records = get_data(driver, url, seen_urls)
         saved = save_to_mysql(connection, records)
         print(f'page {current_page} saved {saved} records')
         time.sleep(2)
 
     driver.quit()
     connection.close()
+
+
+
